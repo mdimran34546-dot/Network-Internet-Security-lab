@@ -12,13 +12,7 @@ A Python-based network packet sniffer that captures live traffic on Linux using 
 
 ---
 
-## 1. Project Title
-
-**Python Socket Library for Network Packet Sniffing**
-
----
-
-## 2. Introduction
+## 1. Project Introduction
 
 A network packet sniffer is a software tool used to watch, capture and inspect
 network traffic. It gives the user visibility into the data packets travelling
@@ -32,7 +26,7 @@ packets and extracts details about the **Ethernet**, **IPv4**, **ICMP** and
 
 ---
 
-## 3. Objectives
+## 2. Objectives
 
 - Capture network traffic so data flow becomes visible.
 - Learn Python socket programming in order to build custom tools.
@@ -45,6 +39,19 @@ packets and extracts details about the **Ethernet**, **IPv4**, **ICMP** and
 
 ---
 
+## 3. Features
+
+- **Ethernet frame analysis** — destination MAC, source MAC and protocol/EtherType.
+- **MAC address formatting** — raw 6-byte values rendered as `AA:BB:CC:DD:EE:FF`.
+- **IPv4 header parsing** — version, header length, TTL, protocol, source and destination IP.
+- **ICMP packet analysis** — type, code and checksum (e.g. `ping` Echo Requests/Replies).
+- **TCP segment analysis** — source/destination ports, sequence & acknowledgment numbers, control flags (URG, ACK, PSH, RST, SYN, FIN) and header offset.
+- **Real-time packet capture** — a continuous `recvfrom` loop.
+- **Malformed-packet safety** — truncated/invalid frames are skipped with a warning instead of crashing the capture loop.
+- **Readable packet display** — structured, human-friendly console output.
+
+---
+
 ## 4. Technologies Used
 
 | Technology | Purpose |
@@ -53,24 +60,13 @@ packets and extracts details about the **Ethernet**, **IPv4**, **ICMP** and
 | **`socket`** | Creating raw sockets and capturing packets (`AF_PACKET`, `SOCK_RAW`). |
 | **`struct`** | Unpacking raw packet headers (byte sequences) into readable fields. |
 | **Kali Linux** (VirtualBox) | The testing environment where live capture is performed as root. |
+| **`unittest`** (offline tests) | Stdlib-only test suite for the parsers (`tests/test_offline_parsers.py`). |
 
 > No third-party packages are required — only the Python standard library.
 
 ---
 
-## 5. Project Features
-
-- **Ethernet frame analysis** — extracts destination MAC, source MAC and protocol/EtherType.
-- **MAC address formatting** — raw 6-byte values rendered as `AA:BB:CC:DD:EE:FF`.
-- **IPv4 header parsing** — version, header length, TTL, protocol, source and destination IP.
-- **ICMP packet analysis** — type, code and checksum (e.g. `ping` Echo Requests/Replies).
-- **TCP segment analysis** — source/destination ports, sequence & acknowledgment numbers, control flags (URG, ACK, PSH, RST, SYN, FIN) and header offset.
-- **Real-time packet capture** — a continuous `recvfrom` loop.
-- **Readable packet display** — structured, human-friendly console output.
-
----
-
-## 6. Repository Structure
+## 5. Project Structure
 
 ```
 Python-Socket-Network-Packet-Sniffer/
@@ -85,15 +81,14 @@ Python-Socket-Network-Packet-Sniffer/
 ├── src/
 │   └── sniffer.py                  # The packet sniffer program
 │
+├── tests/
+│   └── test_offline_parsers.py     # Offline parser tests (no socket, no root)
+│
 ├── screenshots/
+│   ├── 00_cover.png
 │   ├── 01_project_setup.png
-│   ├── 02_python_code.png
-│   ├── 03_packet_capture.png
-│   ├── 04_ethernet_analysis.png
-│   ├── 05_ipv4_analysis.png
-│   ├── 06_icmp_analysis.png
-│   ├── 07_tcp_analysis.png
-│   └── … (additional setup / running / results images)
+│   ├── … (15 images extracted from the original PDF)
+│   └── 14_results_output.png
 │
 └── docs/
     └── project_documentation.md    # Detailed technical documentation
@@ -101,64 +96,48 @@ Python-Socket-Network-Packet-Sniffer/
 
 ---
 
-## 7. Environment Setup
+## 6. Installation and Setup
 
 The project environment was prepared using **Oracle VirtualBox** + **Kali Linux**.
 
 1. Launch the Kali Linux virtual machine.
-2. Open a terminal and verify the working directory:
+2. Open a terminal and verify the working directory and Python version:
 
    ```bash
    pwd
-   ```
-
-3. Verify the Python version:
-
-   ```bash
    python3 --version
    ```
 
-4. Create and enter the project directory:
+3. Create and enter the project directory:
 
    ```bash
    mkdir PacketSniffer
    cd PacketSniffer
-   pwd
-   ls
    ```
 
----
+4. Create the Python file and paste the source from `src/sniffer.py`:
 
-## 8. Installation Instructions
+   ```bash
+   nano sniffer.py
+   ```
 
 Because the project relies only on the Python standard library, there is nothing
-to install. Simply clone/download the repository and you are ready to go.
-
-```bash
-# Optional: review dependencies (none beyond Python 3)
-cat requirements.txt
-```
+else to install.
 
 > A raw `AF_PACKET` socket requires **root** privileges, so the program must be
 > started with `sudo` (see below).
 
 ---
 
-## 9. How to Run the Program
+## 7. Execution Instructions
 
-1. Create the Python file and paste the source (see `src/sniffer.py`):
-
-   ```bash
-   nano sniffer.py
-   ```
-
-2. Run the sniffer with root privileges:
+1. Run the sniffer with root privileges:
 
    ```bash
    sudo python3 sniffer.py
    ```
 
-3. In a **second terminal**, generate traffic so packets appear:
+2. In a **second terminal**, generate traffic so packets appear:
 
    ```bash
    ping 8.8.8.8
@@ -167,9 +146,18 @@ cat requirements.txt
 The sniffer continuously captures frames (`while True:` → `conn.recvfrom(65536)`)
 and prints the decoded Ethernet / IPv4 / ICMP / TCP information for each one.
 
+### Offline tests (no Linux root needed)
+
+The parser logic is covered by a stdlib-only test suite that never opens a
+socket, so it can be run on any OS:
+
+```bash
+python3 tests/test_offline_parsers.py
+```
+
 ---
 
-## 10. Explanation of Ethernet, IPv4, ICMP and TCP Analysis
+## 8. Explanation of Packet Analysis
 
 ### Ethernet Frame Analysis (Layer 2)
 The sniffer captures Layer 2 headers and extracts the **Destination MAC**,
@@ -225,38 +213,15 @@ The TCP module extracts the **source port**, **destination port**,
 where the payload begins, then treats the remaining bytes as the TCP payload —
 separating header information from transmitted data.
 
----
-
-## 11. Screenshots
-
-### Project setup
-![Project setup](screenshots/01_project_setup.png)
-
-### Python code / imports
-![Python code](screenshots/02_python_code.png)
-
-### Packet capture loop
-![Packet capture](screenshots/03_packet_capture.png)
-
-### Ethernet frame analysis
-![Ethernet analysis](screenshots/04_ethernet_analysis.png)
-
-### IPv4 analysis
-![IPv4 analysis](screenshots/05_ipv4_analysis.png)
-
-### ICMP analysis
-![ICMP analysis](screenshots/06_icmp_analysis.png)
-
-### TCP analysis
-![TCP analysis](screenshots/07_tcp_analysis.png)
-
-> Screenshots are extracted directly from the submitted lab report
-> (`assignment/original_lab_report.pdf`). Additional setup / running / results
-> images are also available in the `screenshots/` folder.
+### Malformed / Truncated Packet Handling
+Every parser checks the minimum header length before unpacking (14 bytes for
+Ethernet, 20 for IPv4, 4 for ICMP, 14 for TCP) and raises a clear error for
+truncated data. The capture loop catches these errors, prints a warning and
+continues capturing instead of crashing.
 
 ---
 
-## 12. Sample Output
+## 9. Sample Output
 
 Running `sudo python3 sniffer.py` while `ping 8.8.8.8` runs in another terminal
 produces output such as:
@@ -295,7 +260,57 @@ the report's documented behaviour.)
 
 ---
 
-## 13. Results
+## 10. Screenshots
+
+All images below are extracted directly from the submitted lab report
+(`assignment/original_lab_report.pdf`) — none are fabricated.
+
+### Report cover
+![Cover](screenshots/00_cover.png)
+
+### Project setup (Kali Linux + VirtualBox)
+![Project setup](screenshots/01_project_setup.png)
+
+### Creating the Python file / writing code
+![Create file](screenshots/08_create_file.png)
+
+### Importing socket & struct / Python code
+![Python code](screenshots/02_python_code.png)
+
+### Raw socket creation
+![Raw socket](screenshots/09_raw_socket.png)
+
+### Capture loop (recvfrom)
+![Recvfrom](screenshots/10_recvfrom.png)
+
+### Packet capture running
+![Packet capture](screenshots/03_packet_capture.png)
+
+### Generating traffic (ping)
+![Traffic generation](screenshots/11_traffic_generation.png)
+
+### Ethernet frame analysis
+![Ethernet analysis](screenshots/04_ethernet_analysis.png)
+
+### IPv4 analysis
+![IPv4 analysis](screenshots/05_ipv4_analysis.png)
+
+### ICMP analysis
+![ICMP analysis](screenshots/06_icmp_analysis.png)
+
+### TCP analysis
+![TCP analysis](screenshots/07_tcp_analysis.png)
+
+### Running the program
+![Running program](screenshots/12_running_program.png)
+![Running program 2](screenshots/13_running_program_2.png)
+
+### Results / output
+![Results output](screenshots/14_results_output.png)
+
+---
+
+## 11. Results
 
 As documented in the lab report, the program:
 
@@ -312,7 +327,7 @@ monitoring the network and capturing frames as they arrive.
 
 ---
 
-## 14. Limitations
+## 12. Limitations
 
 - **Root required:** opening an `AF_PACKET` raw socket needs administrator/root
   privileges (`sudo`).
@@ -322,10 +337,26 @@ monitoring the network and capturing frames as they arrive.
   decode ARP, IPv6, UDP payloads or application-layer protocols in depth.
 - **No packet filtering / saving:** it prints to the console and does not write
   `.pcap` files or apply BPF filters.
+- **Report samples are illustrative:** exact MAC/IP values depend on the local
+  network at capture time.
 
 ---
 
-## 15. Author and Academic Information
+## 13. Troubleshooting
+
+| Problem | Likely cause & fix |
+|---|---|
+| `PermissionError` / `Permission denied` on startup | Raw sockets need root: run with `sudo python3 sniffer.py`. |
+| `AttributeError: module 'socket' has no attribute 'AF_PACKET'` | You are not on Linux (e.g. Windows/macOS). `AF_PACKET` is Linux-only — run inside the Kali Linux VM. |
+| Program runs but prints nothing | Generate traffic in a second terminal (`ping 8.8.8.8`), or open a website in the VM's browser. |
+| No packets from other devices | In VirtualBox, NAT mode only shows the VM's own traffic; use a bridged adapter to see more of the LAN (with instructor permission). |
+| `[!] Skipped malformed frame (...)` warnings | Normal behaviour: a truncated/damaged frame arrived and was safely skipped — the sniffer keeps running. |
+| `ModuleNotFoundError` for `sniffer` when running tests | Run tests from the repository root: `python3 tests/test_offline_parsers.py`. |
+| Old Python 2 errors (`print` syntax) | Use Python 3: `python3 --version` should be ≥ 3.7. |
+
+---
+
+## 14. Academic Information
 
 | Field | Detail |
 |---|---|
@@ -341,12 +372,14 @@ monitoring the network and capturing frames as they arrive.
 
 ---
 
-### ⚠️ Note on `src/sniffer.py`
+## 15. Reconstruction Disclaimer
 
-The original lab report PDF contained only **code fragments** (imports, the raw
-socket call, the `struct` formats, function names and sample outputs) — not the
-complete program. The `src/sniffer.py` in this repository is therefore a
-**faithful reconstruction** assembled strictly from those fragments and is
-provided for reference/review. It is **not claimed to be the student's exact
-original file**. If you have the original `sniffer.py`, replace `src/sniffer.py`
-with it and the rest of the repository remains valid.
+The original lab report PDF (`assignment/original_lab_report.pdf`) contains only
+**code fragments** (imports, the raw socket call, the `struct` formats, function
+names and sample outputs) — not the complete program. `src/sniffer.py` in this
+repository is therefore a **faithful reconstruction** assembled strictly from
+those fragments and is provided for reference/review. It is **not claimed to be
+the student's exact original file**. Minimum-length guards and safe payload
+slicing were added so malformed frames cannot crash the capture loop; all logic
+from the report's fragments is unchanged. If you have the original `sniffer.py`,
+replace `src/sniffer.py` with it and the rest of the repository remains valid.

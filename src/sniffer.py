@@ -30,6 +30,11 @@
 #      sudo python3 sniffer.py
 #  Generate traffic in another terminal to see packets:
 #      ping 8.8.8.8
+#
+#  NOTE (added during audit): minimum-length guards and safe payload slicing
+#  were added so that malformed / truncated frames are skipped with a warning
+#  instead of crashing the capture loop. All logic from the report fragments
+#  is unchanged.
 # =============================================================================
 
 import socket
@@ -62,6 +67,8 @@ def ethernet_frame(data):
         Destination MAC (6) | Source MAC (6) | EtherType/Protocol (2)
     Returns (dest_mac, src_mac, eth_proto, payload).
     """
+    if len(data) < 14:
+        raise ValueError(f"truncated Ethernet frame: {len(data)} bytes (need >= 14)")
     dest_mac, src_mac, eth_proto = struct.unpack('! 6s 6s H', data[:14])
     return get_mac_addr(dest_mac), get_mac_addr(src_mac), eth_proto, data[14:]
 
@@ -71,9 +78,13 @@ def ipv4_packet(data):
     Parse the IPv4 (Layer 3) header (minimum 20 bytes).
     Returns (version, header_length, ttl, proto, src_ip, dst_ip, payload).
     """
+    if len(data) < 20:
+        raise ValueError(f"truncated IPv4 packet: {len(data)} bytes (need >= 20)")
     version_header_length = data[0]
     version = version_header_length >> 4
     header_length = (version_header_length & 0x0F) * 4
+    if header_length < 20:
+        raise ValueError(f"invalid IPv4 header length: {header_length} bytes")
     ttl, proto, src, target = struct.unpack('! 8x B B 2x 4s 4s', data[:20])
     return (version, header_length, ttl, proto,
             get_ipv4_addr(src), get_ipv4_addr(target), data[header_length:])
@@ -81,6 +92,8 @@ def ipv4_packet(data):
 
 def icmp_packet(data):
     """Parse an ICMP packet (Type, Code, Checksum)."""
+    if len(data) < 4:
+        raise ValueError(f"truncated ICMP packet: {len(data)} bytes (need >= 4)")
     icmp_type, code, checksum = struct.unpack('! B B H', data[:4])
     return icmp_type, code, checksum, data[4:]
 
@@ -91,11 +104,16 @@ def tcp_segment(data):
         Src Port (2) | Dst Port (2) | Seq (4) | Ack (4) | Offset+Flags (2)
     Returns (src_port, dst_port, seq, ack, flags_dict, payload).
     """
+    if len(data) < 14:
+        raise ValueError(f"truncated TCP segment: {len(data)} bytes (need >= 14)")
     src_port, dst_port, sequence, acknowledgment, offset_reserved_flags = \
         struct.unpack('! H H L L H', data[:14])
 
     # Data Offset lives in the top 4 bits; *4 converts 32-bit words to bytes.
     offset = (offset_reserved_flags >> 12) * 4
+    if offset < 20:
+        # Guard against a malformed Data Offset (minimum TCP header is 20 bytes).
+        offset = 20
 
     # The low 6 bits are the control flags URG, ACK, PSH, RST, SYN, FIN.
     flags = offset_reserved_flags & 0x3F
@@ -130,47 +148,52 @@ def main():
 
     while True:
         raw_data, addr = conn.recvfrom(65536)
-        dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
-        print_ethernet(dest_mac, src_mac, eth_proto)
+        try:
+            dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
+            print_ethernet(dest_mac, src_mac, eth_proto)
 
-        if eth_proto == ETHERTYPE_IPV4:
-            version, hl, ttl, proto, src_ip, dst_ip, ip_data = ipv4_packet(data)
-            print('IPv4 Packet:')
-            print(f'  Version        : {version}')
-            print(f'  Header Length  : {hl}')
-            print(f'  TTL            : {ttl}')
-            print(f'  Protocol       : {proto}')
-            print(f'  Source IP      : {src_ip}')
-            print(f'  Destination IP : {dst_ip}')
+            if eth_proto == ETHERTYPE_IPV4:
+                version, hl, ttl, proto, src_ip, dst_ip, ip_data = ipv4_packet(data)
+                print('IPv4 Packet:')
+                print(f'  Version        : {version}')
+                print(f'  Header Length  : {hl}')
+                print(f'  TTL            : {ttl}')
+                print(f'  Protocol       : {proto}')
+                print(f'  Source IP      : {src_ip}')
+                print(f'  Destination IP : {dst_ip}')
 
-            if proto == IPPROTO_ICMP:
-                icmp_type, code, checksum, _ = icmp_packet(ip_data)
-                print('ICMP Packet:')
-                print(f'  Type     : {icmp_type}')
-                print(f'  Code     : {code}')
-                print(f'  Checksum : {checksum}')
+                if proto == IPPROTO_ICMP:
+                    icmp_type, code, checksum, _ = icmp_packet(ip_data)
+                    print('ICMP Packet:')
+                    print(f'  Type     : {icmp_type}')
+                    print(f'  Code     : {code}')
+                    print(f'  Checksum : {checksum}')
 
-            elif proto == IPPROTO_TCP:
-                (s_port, d_port, seq, ack,
-                 flags, payload) = tcp_segment(ip_data)
-                print('TCP Segment:')
-                print(f'  Source Port      : {s_port}')
-                print(f'  Destination Port : {d_port}')
-                print(f'  Sequence Number  : {seq}')
-                print(f'  Ack Number       : {ack}')
-                print('  Flags            : ' +
-                      ' '.join(name for name, val in flags.items() if val))
-                print(f'  Payload length   : {len(payload)} bytes')
+                elif proto == IPPROTO_TCP:
+                    (s_port, d_port, seq, ack,
+                     flags, payload) = tcp_segment(ip_data)
+                    print('TCP Segment:')
+                    print(f'  Source Port      : {s_port}')
+                    print(f'  Destination Port : {d_port}')
+                    print(f'  Sequence Number  : {seq}')
+                    print(f'  Ack Number       : {ack}')
+                    print('  Flags            : ' +
+                          ' '.join(name for name, val in flags.items() if val))
+                    print(f'  Payload length   : {len(payload)} bytes')
 
-            elif proto == IPPROTO_UDP:
-                print('UDP Segment: (analysis not covered in lab report)')
+                elif proto == IPPROTO_UDP:
+                    print('UDP Segment: (analysis not covered in lab report)')
 
-        elif eth_proto == ETHERTYPE_ARP:
-            print('ARP Packet')
-        elif eth_proto == ETHERTYPE_IPV6:
-            print('IPv6 Packet (analysis not covered in lab report)')
-        else:
-            print('Other / Non-IP Ethernet payload')
+            elif eth_proto == ETHERTYPE_ARP:
+                print('ARP Packet')
+            elif eth_proto == ETHERTYPE_IPV6:
+                print('IPv6 Packet (analysis not covered in lab report)')
+            else:
+                print('Other / Non-IP Ethernet payload')
+
+        except (ValueError, struct.error, IndexError) as exc:
+            # Malformed or truncated frame: warn and keep capturing.
+            print(f'[!] Skipped malformed frame ({len(raw_data)} bytes): {exc}')
 
 
 if __name__ == '__main__':

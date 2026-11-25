@@ -164,31 +164,57 @@ Control flags: **URG, ACK, PSH, RST, SYN, FIN**.
    ```bash
    python3 -m py_compile src/sniffer.py
    ```
-2. **Run** (requires Linux + root):
+2. **Offline parser tests** (safe, no socket, no root — runs on any OS):
+   ```bash
+   python3 tests/test_offline_parsers.py
+   ```
+   The suite (`unittest`, stdlib only) covers MAC formatting, Ethernet,
+   IPv4, ICMP and TCP parsing with synthetic frames built via `struct`,
+   including truncated/invalid inputs. **Current status: 16/16 tests pass.**
+3. **Run** (requires Linux + root):
    ```bash
    sudo python3 sniffer.py
    ```
-3. **Generate traffic**:
+4. **Generate traffic**:
    ```bash
    ping 8.8.8.8
    ```
 
-The parser logic can also be validated offline by importing the module and feeding
-it hand-built byte strings (Ethernet + IPv4 + ICMP/TCP), without opening any
-socket.
+---
+
+## 6. Robustness & Error Handling
+
+Every parser validates the minimum header length before unpacking and raises a
+clear `ValueError` for truncated data; the capture loop catches these errors
+per-packet, prints a warning and keeps capturing.
+
+| Parser | Minimum bytes | Protection |
+|---|---|---|
+| `ethernet_frame()` | 14 | Rejects frames shorter than the Ethernet header. |
+| `ipv4_packet()` | 20 | Rejects truncated IP headers and IHL values that decode to < 20 bytes. |
+| `icmp_packet()` | 4 | Rejects truncated ICMP headers. |
+| `tcp_segment()` | 14 | Rejects truncated TCP headers; a bogus Data Offset (< 20) is clamped to 20 so header bytes never leak into the payload. |
+
+Byte order note: all multi-byte fields are unpacked with `!` (network /
+big-endian) — EtherType, TTL/protocol positions, IP addresses, ICMP checksum,
+TCP ports, sequence/acknowledgment numbers and the flags word. The socket
+protocol `socket.ntohs(3)` is the standard idiom for `ETH_P_ALL` on an
+`AF_PACKET` socket.
+
 
 ---
 
-## 6. Environment & Privileges
+## 7. Environment & Privileges
 
 - **OS:** Linux (developed/tested on Kali Linux under VirtualBox).
 - **Privileges:** `sudo` / root is mandatory — raw `AF_PACKET` sockets require
   the `CAP_NET_RAW` capability.
-- **Dependencies:** Python 3 standard library only (`socket`, `struct`).
+- **Dependencies:** Python 3 standard library only (`socket`, `struct`, and
+  `unittest` for the offline tests).
 
 ---
 
-## 7. Extending the Project
+## 8. Extending the Project
 
 Possible improvements (not part of the original lab):
 - Decode **UDP** segments.
