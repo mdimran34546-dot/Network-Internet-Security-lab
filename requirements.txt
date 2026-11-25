@@ -1,0 +1,12 @@
+# Python Socket Library for Network Packet Sniffing
+#
+# This project uses ONLY Python standard-library modules:
+#   - socket   : create raw sockets and capture packets
+#   - struct   : unpack raw packet headers into readable fields
+#
+# No third-party packages are required. Any Python 3.7+ interpreter works.
+# On Linux (e.g., Kali Linux) the script must be run as root (sudo) so it can
+# open an AF_PACKET raw socket.
+#
+# (Kept intentionally minimal / stdlib-only. Add external deps here only if
+#  you extend the project with extra libraries.)
