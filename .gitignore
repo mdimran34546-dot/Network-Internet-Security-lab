@@ -1,0 +1,32 @@
+# Byte-compiled / cached Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS junk
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Captured packet dumps (keep repo clean)
+*.pcap
+packets_*.log
